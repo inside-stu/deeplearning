@@ -1,0 +1,20 @@
+# Stage 1: handwritten learning essentials
+torch>=2.1.0
+torchvision>=0.16.0
+numpy>=1.24.0
+pillow>=10.0.0
+opencv-python>=4.8.0
+tqdm>=4.66.0
+pandas>=2.0.0
+onnx>=1.15.0
+onnxruntime-gpu>=1.17.0
+onnxsim>=0.4.36
+
+# Stage 2: framework learning
+ultralytics>=8.3.0
+transformers>=4.41.0
+peft>=0.11.0
+trl>=0.9.0
+optimum>=1.20.0
+accelerate>=0.30.0
+torch-pruning>=1.4.0

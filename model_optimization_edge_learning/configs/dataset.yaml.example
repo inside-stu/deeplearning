@@ -1,0 +1,16 @@
+# Copy this file to dataset.yaml and update paths/classes.
+#
+# Expected YOLO layout:
+# dataset_root/
+#   images/train/*.jpg
+#   images/val/*.jpg
+#   labels/train/*.txt
+#   labels/val/*.txt
+
+path: D:/path/to/dataset_root
+train: images/train
+val: images/val
+test:
+
+names:
+  0: defect
