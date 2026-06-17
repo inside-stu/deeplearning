@@ -339,8 +339,9 @@ print((y_a - y_b).abs().max())
 
 模型好不好至少看两层：
 
-- 整体验证指标：`val_loss`、`val_accuracy`、macro precision、macro recall。
+- 整体验证指标：`val_loss`、`val_accuracy_micro`、all-class macro precision/recall、present-class macro precision/recall。
 - 具体样本预测：target 是什么，pred 是什么，top-k 概率是否合理。
+- 类别分布：`present_classes` 和 `class_support` 能告诉你验证集中实际有哪些类别。
 
 </details>
 
@@ -353,21 +354,31 @@ print((y_a - y_b).abs().max())
 C:\Users\yuhaiyang\AppData\Local\miniforge3\envs\MultiADS\python.exe -m core.evaluate_checkpoint --checkpoint models/handwritten_tiny_classifier.pt --dataset synthetic --num-classes 3 --device cpu --sample-count 8
 ```
 
+如果想随机抽样查看验证样本，加上 `--sample-mode random --sample-seed 123`。同一个 seed 会得到同一组样本，方便复现实验：
+
+```powershell
+C:\Users\yuhaiyang\AppData\Local\miniforge3\envs\MultiADS\python.exe -m core.evaluate_checkpoint --checkpoint models/handwritten_tiny_classifier.pt --dataset synthetic --num-classes 3 --device cpu --sample-count 8 --sample-mode random --sample-seed 123
+```
+
 你的 MNIST 100 类 CSV checkpoint：
 
 ```powershell
-C:\Users\yuhaiyang\AppData\Local\miniforge3\envs\MultiADS\python.exe -m core.evaluate_checkpoint --checkpoint models/mnist_100class_tiny_classifier.pt --dataset csv --train-csv data/extracted_images/train.csv --val-csv data/extracted_images/val.csv --data-root data/extracted_images --num-classes 100 --image-size 32 --device cpu --max-val-samples 512 --sample-count 12 --topk 5
+C:\Users\yuhaiyang\AppData\Local\miniforge3\envs\MultiADS\python.exe -m core.evaluate_checkpoint --checkpoint models/mnist_100class_tiny_classifier.pt --dataset csv --train-csv data/extracted_images/train.csv --val-csv data/extracted_images/val.csv --data-root data/extracted_images --num-classes 100 --image-size 32 --device cpu --max-val-samples 512 --sample-count 12 --topk 5 --sample-mode random --sample-seed 123
 ```
 
 输出会包含：
 
 ```text
 val_loss=...
-val_accuracy=...
-macro_precision=...
-macro_recall=...
+val_accuracy_micro=...
+macro_precision_all_classes=...
+macro_recall_all_classes=...
+macro_precision_present_classes=...
+macro_recall_present_classes=...
+present_classes=[...]
+class_support={...}
 sample_predictions:
-  000 path=... target=... pred=... correct=True top5=[...]
+  000 dataset_index=... path=... target=... pred=... correct=True top5=[...]
 ```
 
 </details>
@@ -377,15 +388,28 @@ sample_predictions:
 
 训练时打印的 `val_acc` 是每个 epoch 的验证结果，但训练结束后你还需要能独立加载某个 checkpoint 来复查模型。这是工程里非常常见的动作：训练、保存、加载、评估、抽样看预测。只有 checkpoint 能被加载并且验证集指标和样本预测都合理，才说明模型真的可用。
 
+`val_accuracy_micro` 是按样本统计的整体准确率：验证集中有多少样本预测对了。macro precision/recall 是先分别计算每个类别的 precision/recall，再对类别求平均，所以它让每个类别权重相同，适合观察类别不均衡问题。
+
+这里故意同时输出两个 macro 口径：
+
+- `macro_precision_all_classes` / `macro_recall_all_classes`：对所有类别求平均。即使某个类别在当前验证集中没有出现，也会参与平均，所以小验证集或类别缺失时可能很低。
+- `macro_precision_present_classes` / `macro_recall_present_classes`：只对验证集中实际出现的类别求平均，更适合快速判断“当前这批验证样本上的表现”。
+
+例如 3 分类任务里，如果验证集刚好只有类别 1，模型也全部预测对了，那么 `val_accuracy_micro=1.0000`。但 all-class macro 会近似是 `(0 + 1 + 0) / 3 = 0.3333`，因为类别 0 和类别 2 在这批验证集中没有有效表现。这不是模型输出矛盾，而是指标平均口径不同。
+
+默认 `--sample-mode first` 会打印验证集中的前 N 个样本，不是随机抽样；使用 `--sample-mode random --sample-seed 123` 才是可复现的随机抽样。
+
 </details>
 
 <details>
 <summary>自检标准</summary>
 
 - 评估脚本能成功加载 checkpoint。
-- 输出验证集指标。
+- 输出验证集指标，并能解释 micro accuracy、all-class macro、present-class macro 的区别。
+- 能根据 `present_classes` 和 `class_support` 判断验证集是否缺少某些类别。
 - 输出若干样本的 `target`、`pred`、`correct` 和 top-k 概率。
-- 如果 `val_accuracy` 很低，你能说明它可能是训练轮数太少、类别太多、模型太小、数据预处理不合适或学习率不合适。
+- 能说明默认样本输出是前 N 个样本，随机抽样需要显式使用 `--sample-mode random`。
+- 如果 `val_accuracy_micro` 很低，你能说明它可能是训练轮数太少、类别太多、模型太小、数据预处理不合适或学习率不合适。
 
 </details>
 
