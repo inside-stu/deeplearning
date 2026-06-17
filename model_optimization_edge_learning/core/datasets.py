@@ -99,5 +99,6 @@ class SyntheticClassificationDataset(Dataset):
 
 
 def classification_collate(batch):
+    """Merge a list of (image, label) samples into one batched tensor pair."""
     images, labels = zip(*batch)
     return torch.stack(list(images), dim=0), torch.stack(list(labels), dim=0)

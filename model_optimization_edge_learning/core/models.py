@@ -100,10 +100,10 @@ class LoRALinear(nn.Module):
         nn.init.zeros_(self.lora_b)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # Frozen base branch plus a trainable low-rank LoRA update branch.
         base = F.linear(x, self.weight, self.bias)
         update = F.linear(F.linear(x, self.lora_a), self.lora_b) * self.scaling
         return base + update
 
     def merge_weight(self) -> torch.Tensor:
         return self.weight + (self.lora_b @ self.lora_a) * self.scaling
-

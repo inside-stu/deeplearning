@@ -22,7 +22,7 @@
 | Dataset | `core/datasets.py` | 决定一个样本怎么读取，返回 `(image, label)` | 任务 1、任务 2 |
 | DataLoader | `core/train_loop.py` 的 `build_dataloaders` | 把多个样本组成 batch，并控制 shuffle | 任务 1、任务 2 |
 | transform | `image_to_tensor` / `image_size` | 把 PIL 图片转成 NCHW tensor，并 resize 到统一尺寸 | 任务 2 |
-| collate_fn | `classification_collate` | 把多个 `(image, label)` 堆叠成 batch tensor | 任务 2 |
+| collate_fn | `classification_collate` | 决定 DataLoader 如何把一批样本列表拼成 `(images, labels)` batch tensor | 任务 2 |
 | train/eval | `train_one_epoch` / `evaluate_classifier` | 切换训练模式和验证模式 | 任务 3、任务 6 |
 | forward/loss/backward/step | `train_one_epoch` | 完成一次参数更新 | 任务 3 |
 | scheduler | `main` 中的 `CosineAnnealingLR` | 每个 epoch 调整学习率 | 任务 4 |
@@ -117,6 +117,8 @@ C:\Users\yuhaiyang\AppData\Local\miniforge3\envs\MultiADS\python.exe -m core.tra
 
 CSV 里只写相对路径，例如 `images/train/red_square_000.png`。真实图片路径等于 `data_root / image`。
 
+`Dataset.__getitem__` 每次只返回一个样本：`(image, label)`。`DataLoader` 会先取出多个样本，组成一个 Python list，这个 list 才会交给 `collate_fn` 拼成 batch。
+
 </details>
 
 <details>
@@ -138,12 +140,60 @@ images/train/green_circle_000.png,1
 images/train/blue_triangle_000.png,2
 ```
 
+`collate_fn` 对应代码：
+
+```python
+train_loader = DataLoader(
+    train_dataset,
+    batch_size=batch_size,
+    shuffle=True,
+    collate_fn=classification_collate,
+)
+```
+
+`classification_collate` 的输入不是单张图片，而是一组样本。例如 `batch_size=4` 时，`batch` 大概长这样：
+
+```python
+[
+    (image0, label0),
+    (image1, label1),
+    (image2, label2),
+    (image3, label3),
+]
+```
+
+所以这段代码做的是“拆开，再堆叠”：
+
+```python
+def classification_collate(batch):
+    images, labels = zip(*batch)
+    return torch.stack(list(images), dim=0), torch.stack(list(labels), dim=0)
+```
+
+- `zip(*batch)`：把 `[(image0, label0), (image1, label1)]` 拆成 `images=(image0, image1)` 和 `labels=(label0, label1)`。
+- `torch.stack(list(images), dim=0)`：把多张 `[C, H, W]` 图片堆成 `[B, C, H, W]`，这里的 `B` 就是 batch size。
+- `torch.stack(list(labels), dim=0)`：把多个标量 label 堆成 `[B]`，这样 `CrossEntropyLoss(logits, labels)` 才能直接使用。
+
+如果没有正确的 `collate_fn`，训练循环里的：
+
+```python
+for images, labels in train_loader:
+    logits = model(images)
+```
+
+就拿不到形状规整的 batch tensor。
+
 </details>
 
 <details>
 <summary>为什么这样做</summary>
 
 真实项目里的数据由路径、标签、读取逻辑共同决定。`CsvImageClassificationDataset.__getitem__` 会读取 CSV 的一行，打开图片，resize，转 tensor，再返回 `(image_tensor, label)`。
+
+`collate_fn` 解决的是另一个问题：模型训练不是一次只看一张图，而是一次看一个 batch。它把多个单样本 `(image_tensor, label)` 合并成模型真正需要的 `images` 和 `labels`。分类任务里常见形状是：
+
+- 单个样本：`image=[3, 32, 32]`，`label=[]`
+- 一个 batch：`images=[batch_size, 3, 32, 32]`，`labels=[batch_size]`
 
 </details>
 
@@ -154,6 +204,8 @@ images/train/blue_triangle_000.png,2
 - 图片目录下有 png 图片。
 - CSV 路线训练能正常跑完。
 - 你能解释 `--data-root`、`--train-csv`、`--val-csv` 分别控制什么。
+- 你能解释 `classification_collate` 为什么要先 `zip(*batch)`，再 `torch.stack`。
+- 你能说出单个样本形状和 batch 形状的区别。
 
 </details>
 
