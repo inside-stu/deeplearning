@@ -6,8 +6,19 @@ import torch
 from torch import nn
 
 
+def fuse_model_if_available(model: nn.Module, is_qat: bool = False) -> None:
+    fuse_model = getattr(model, "fuse_model", None)
+    if callable(fuse_model):
+        try:
+            fuse_model(is_qat=is_qat)
+        except TypeError:
+            fuse_model()
+
+
 def prepare_qat_model(model: nn.Module, backend: str = "fbgemm") -> nn.Module:
     model.train()
+    # QAT flow: fuse train-time Conv/BN/ReLU first, then insert fake quant modules.
+    fuse_model_if_available(model, is_qat=True)
     torch.backends.quantized.engine = backend
     model.qconfig = torch.ao.quantization.get_default_qat_qconfig(backend)
     return torch.ao.quantization.prepare_qat(model, inplace=False)
@@ -39,4 +50,3 @@ def convert_qat_model(prepared_model: nn.Module) -> nn.Module:
     prepared_model.cpu()
     prepared_model.eval()
     return torch.ao.quantization.convert(prepared_model, inplace=False)
-
