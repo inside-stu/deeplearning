@@ -29,6 +29,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--patience", type=int, default=20)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--resume", action="store_true")
+    parser.add_argument("--plots", dest="plots", action="store_true", default=True)
+    parser.add_argument("--no-plots", dest="plots", action="store_false")
     return parser.parse_args()
 
 
@@ -58,6 +60,7 @@ def main() -> None:
         patience=args.patience,
         seed=args.seed,
         resume=args.resume,
+        plots=args.plots,
     )
     print(results)
 

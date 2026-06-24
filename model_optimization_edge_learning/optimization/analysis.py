@@ -22,7 +22,25 @@ def parameter_count(model: nn.Module, trainable_only: bool = False) -> int:
 def sparsity(model: nn.Module) -> float:
     zeros = 0
     total = 0
+    skipped_parameters: set[int] = set()
+
+    for module in model.modules():
+        for buffer_name, _ in module.named_buffers(recurse=False):
+            if not buffer_name.endswith("_mask"):
+                continue
+
+            parameter_name = buffer_name[: -len("_mask")]
+            effective_parameter = getattr(module, parameter_name)
+            original_parameter = getattr(module, f"{parameter_name}_orig", None)
+            if original_parameter is not None:
+                skipped_parameters.add(id(original_parameter))
+
+            total += effective_parameter.numel()
+            zeros += (effective_parameter == 0).sum().item()
+
     for parameter in model.parameters():
+        if id(parameter) in skipped_parameters:
+            continue
         total += parameter.numel()
         zeros += (parameter == 0).sum().item()
     return zeros / max(total, 1)
@@ -66,4 +84,3 @@ def benchmark_forward(
     p50_ms = statistics.median(latencies_ms)
     p95_ms = sorted(latencies_ms)[round(0.95 * (len(latencies_ms) - 1))]
     return {"mean_ms": mean_ms, "p50_ms": p50_ms, "p95_ms": p95_ms, "fps": 1000 / mean_ms}
-

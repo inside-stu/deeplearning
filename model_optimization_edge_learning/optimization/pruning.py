@@ -32,6 +32,19 @@ def remove_pruning_reparam(model: nn.Module) -> None:
 def module_sparsity(module: nn.Module) -> float:
     zeros = 0
     total = 0
+
+    for buffer_name, _ in module.named_buffers(recurse=False):
+        if not buffer_name.endswith("_mask"):
+            continue
+
+        parameter_name = buffer_name[: -len("_mask")]
+        effective_parameter = getattr(module, parameter_name)
+        total += effective_parameter.numel()
+        zeros += (effective_parameter == 0).sum().item()
+
+    if total > 0:
+        return zeros / total
+
     for parameter in module.parameters():
         total += parameter.numel()
         zeros += (parameter == 0).sum().item()
@@ -48,4 +61,3 @@ def lowest_importance_channels(conv: nn.Conv2d, amount: int) -> torch.Tensor:
     importance = channel_l1_importance(conv)
     amount = min(amount, importance.numel())
     return torch.argsort(importance)[:amount]
-

@@ -36,7 +36,11 @@ def train_one_epoch(
         labels = labels.to(device)
         optimizer.zero_grad(set_to_none=True)
 
-        with torch.autocast(device_type=device.type, enabled=autocast_enabled):
+        if autocast_enabled:
+            with torch.autocast(device_type=device.type):
+                logits = model(images)
+                loss = criterion(logits, labels)
+        else:
             logits = model(images)
             loss = criterion(logits, labels)
 
